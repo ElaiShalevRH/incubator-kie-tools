@@ -38,6 +38,7 @@ type DeployUndeployCmdConfig struct {
 	CustomGeneratedManifestDir string
 	TempDir                    string
 	ApplicationPropertiesPath  string
+	SecretPropertiesPath       string
 	SubflowsDir                string
 	SpecsDir                   string
 	SchemasDir                 string
@@ -119,6 +120,14 @@ func generateManifests(cfg *DeployUndeployCmdConfig) error {
 		fmt.Printf(" - ✅ Properties file found: %s\n", cfg.ApplicationPropertiesPath)
 	}
 
+	fmt.Println("🔍 Looking for secret files...")
+
+	secretPropertiesPath := findSecretPropertiesPath(dir)
+	if secretPropertiesPath != "" {
+		cfg.SecretPropertiesPath = secretPropertiesPath
+		fmt.Printf(" - ✅ Secret Properties file found: %s\n", cfg.SecretPropertiesPath)
+	}
+
 	supportFileExtensions := []string{metadata.JSONExtension, metadata.YAMLExtension, metadata.YMLExtension}
 
 	fmt.Println("🔍 Looking for specs files...")
@@ -168,6 +177,14 @@ func generateManifests(cfg *DeployUndeployCmdConfig) error {
 			return err
 		}
 		handler.WithAppProperties(appIO)
+	}
+
+	if cfg.SecretPropertiesPath != "" {
+		appIO, err := common.MustGetFile(cfg.SecretPropertiesPath)
+		if err != nil {
+			return err
+		}
+		handler.WithSecretProperties(appIO)
 	}
 
 	for _, subflow := range cfg.SubFlowsFilesPath {
@@ -225,6 +242,17 @@ func generateManifests(cfg *DeployUndeployCmdConfig) error {
 
 func findApplicationPropertiesPath(directoryPath string) string {
 	filePath := filepath.Join(directoryPath, metadata.ApplicationProperties)
+
+	fileInfo, err := os.Stat(filePath)
+	if err != nil || fileInfo.IsDir() {
+		return ""
+	}
+
+	return filePath
+}
+
+func findSecretPropertiesPath(directoryPath string) string {
+	filePath := filepath.Join(directoryPath, metadata.SecretProperties)
 
 	fileInfo, err := os.Stat(filePath)
 	if err != nil || fileInfo.IsDir() {

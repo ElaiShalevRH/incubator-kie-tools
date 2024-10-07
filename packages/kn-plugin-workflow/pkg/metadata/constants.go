@@ -83,6 +83,7 @@ const (
 	YMLSWExtension        = "sw.yml"
 	JSONSWExtension       = "sw.json"
 	ApplicationProperties = "application.properties"
+	SecretProperties = "secret.properties"
 
 	ManifestServiceFilesKind = "SonataFlow"
 
