@@ -34,6 +34,7 @@ const (
 	workflowUserConfigMapNameSuffix = "-props"
 	// ApplicationPropertiesFileName is the default application properties file name holding user properties
 	ApplicationPropertiesFileName      = "application.properties"
+	SecretPropertiesFileName           = "secret.properties"
 	workflowManagedConfigMapNameSuffix = "-managed-props"
 	// LabelApp key to use among object selectors, "app" is used among k8s applications to group objects in some UI consoles
 	LabelApp = "app"
@@ -79,6 +80,11 @@ func GetWorkflowUserPropertiesConfigMapName(workflow *operatorapi.SonataFlow) st
 // GetWorkflowManagedPropertiesConfigMapName gets the default ConfigMap name that holds the managed application property for the given workflow
 func GetWorkflowManagedPropertiesConfigMapName(workflow *operatorapi.SonataFlow) string {
 	return workflow.Name + workflowManagedConfigMapNameSuffix
+}
+
+// GetWorkflowUserPropertiesSecretName gets the default Secret name that holds the user secret property for the given workflow
+func GetWorkflowUserPropertiesSecretName(workflow *operatorapi.SonataFlow) string {
+	return workflow.Name
 }
 
 // GetManagedPropertiesFileName gets the default ConfigMap name that holds the managed application property for the given workflow
@@ -152,6 +158,18 @@ func CreateNewManagedPropsConfigMap(workflow *operatorapi.SonataFlow, properties
 			Labels:    GetMergedLabels(workflow),
 		},
 		Data: map[string]string{GetManagedPropertiesFileName(workflow): properties},
+	}
+}
+
+// CreateNewUserPropsSecret creates a new empty Secret object to hold the user secret properties of the workflow.
+func CreateNewUserPropsSecret(workflow *operatorapi.SonataFlow) *corev1.Secret {
+	return &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      GetWorkflowUserPropertiesSecretName(workflow),
+			Namespace: workflow.Namespace,
+			Labels:    GetMergedLabels(workflow),
+		},
+		Data: map[string][]byte{SecretPropertiesFileName: []byte("")},
 	}
 }
 

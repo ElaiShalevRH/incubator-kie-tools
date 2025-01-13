@@ -58,7 +58,7 @@ func Test_Handler_WorkflowMinimalAndProps(t *testing.T) {
 		Named("minimal").
 		Profile(metadata.PreviewProfile).
 		WithWorkflow(getWorkflowMinimal()).
-		WithAppProperties(getWorkflowProperties()).
+		WithAppProperties(getWorkflowApplicationProperties()).
 		AsObjects()
 	assert.NoError(t, err)
 	assert.NotNil(t, proj.Workflow)
@@ -70,10 +70,27 @@ func Test_Handler_WorkflowMinimalAndProps(t *testing.T) {
 	assert.NotEmpty(t, proj.Properties.Data)
 }
 
+func Test_Handler_WorkflowMinimalAndSecrets(t *testing.T) {
+	proj, err := New("default").
+		Named("minimal").
+		Profile(metadata.PreviewProfile).
+		WithWorkflow(getWorkflowMinimal()).
+		WithSecretProperties(getWorkflowSecretProperties()).
+		AsObjects()
+	assert.NoError(t, err)
+	assert.NotNil(t, proj.Workflow)
+	assert.NotNil(t, proj.Secrets)
+	assert.Equal(t, "minimal", proj.Workflow.Name)
+	assert.Equal(t, "minimal", proj.Secrets.Name)
+	assert.NotEmpty(t, proj.Secrets.Data["secret.properties"])
+	assert.Equal(t, string(metadata.PreviewProfile), proj.Workflow.Annotations[metadata.Profile])
+	assert.NotEmpty(t, proj.Secrets.Data)
+}
+
 func Test_Handler_WorkflowMinimalAndPropsAndSpec(t *testing.T) {
 	proj, err := New("default").
 		WithWorkflow(getWorkflowMinimal()).
-		WithAppProperties(getWorkflowProperties()).
+		WithAppProperties(getWorkflowApplicationProperties()).
 		AddResource("myopenapi.json", getSpecOpenApi()).
 		AsObjects()
 	assert.NoError(t, err)
@@ -101,7 +118,7 @@ func Test_Handler_WorkflowMinimalAndPropsAndSpec(t *testing.T) {
 func Test_Handler_WorkflowMinimalAndPropsAndSpecAndGeneric(t *testing.T) {
 	proj, err := New("default").
 		WithWorkflow(getWorkflowMinimal()).
-		WithAppProperties(getWorkflowProperties()).
+		WithAppProperties(getWorkflowApplicationProperties()).
 		AddResource("myopenapi.json", getSpecOpenApi()).
 		AddResource("myopenapi.json", getSpecOpenApi()).
 		AddResource("myopenapi2.json", getSpecOpenApi()).
@@ -134,6 +151,46 @@ func Test_Handler_WorkflowMinimalAndPropsAndSpecAndGeneric(t *testing.T) {
 	assert.NotEmpty(t, data)
 }
 
+func Test_Handler_WorkflowMinimalAndPropsAndSpecAndSecretAndGeneric(t *testing.T) {
+	proj, err := New("default").
+		WithWorkflow(getWorkflowMinimal()).
+		WithSecretProperties(getWorkflowSecretProperties()).
+		WithAppProperties(getWorkflowApplicationProperties()).
+		AddResource("myopenapi.json", getSpecOpenApi()).
+		AddResource("myopenapi.json", getSpecOpenApi()).
+		AddResource("myopenapi2.json", getSpecOpenApi()).
+		AddResourceAt("input.json", "files", getSpecGeneric()).
+		AsObjects()
+	assert.NoError(t, err)
+	assert.NotNil(t, proj.Workflow)
+	assert.NotNil(t, proj.Properties)
+	assert.NotNil(t, proj.Secrets)
+	assert.NotEmpty(t, proj.Resources)
+	sort.Slice(proj.Resources, func(i, j int) bool {
+		return proj.Resources[i].Name < proj.Resources[j].Name
+	})
+	sort.Slice(proj.Workflow.Spec.Resources.ConfigMaps, func(i, j int) bool {
+		return proj.Workflow.Spec.Resources.ConfigMaps[i].ConfigMap.Name < proj.Workflow.Spec.Resources.ConfigMaps[j].ConfigMap.Name
+	})
+
+	assert.Equal(t, "hello", proj.Workflow.Name)
+	assert.Equal(t, "hello-props", proj.Properties.Name)
+	assert.Equal(t, "hello", proj.Secrets.Name)
+	assert.NotEmpty(t, proj.Properties.Data)
+	assert.NotEmpty(t, proj.Secrets.Data)
+	assert.Equal(t, 2, len(proj.Resources))
+	assert.Equal(t, "01-hello-resources-files", proj.Resources[0].Name)
+	assert.Equal(t, "02-hello-resources-specs", proj.Resources[1].Name)
+	assert.Equal(t, proj.Workflow.Spec.Resources.ConfigMaps[0].ConfigMap.Name, proj.Resources[0].Name)
+	assert.Equal(t, proj.Workflow.Spec.Resources.ConfigMaps[1].ConfigMap.Name, proj.Resources[1].Name)
+	data, err := getResourceDataWithFileName(proj.Resources, "myopenapi.json")
+	assert.NoError(t, err)
+	assert.NotEmpty(t, data)
+	data, err = getResourceDataWithFileName(proj.Resources, "input.json")
+	assert.NoError(t, err)
+	assert.NotEmpty(t, data)
+}
+
 func getResourceDataWithFileName(cms []*corev1.ConfigMap, fileName string) (string, error) {
 	for i := range cms {
 		if data, ok := cms[i].Data[fileName]; ok {
@@ -146,13 +203,15 @@ func getResourceDataWithFileName(cms []*corev1.ConfigMap, fileName string) (stri
 func Test_Handler_WorklflowServiceAndPropsAndSpec_SaveAs(t *testing.T) {
 	handler := New("default").
 		WithWorkflow(getWorkflowService()).
-		WithAppProperties(getWorkflowProperties()).
+		WithAppProperties(getWorkflowApplicationProperties()).
+		WithSecretProperties(getWorkflowSecretProperties()).
 		AddResource("myopenapi.json", getSpecOpenApi()).
 		AddResourceAt("schema.json", "files", getSpecGeneric())
 	proj, err := handler.AsObjects()
 	assert.NoError(t, err)
 	assert.NotNil(t, proj.Workflow)
 	assert.NotNil(t, proj.Properties)
+	assert.NotNil(t, proj.Secrets)
 	assert.NotEmpty(t, proj.Resources)
 
 	tmpPath, err := os.MkdirTemp("", "*-test")
@@ -162,16 +221,18 @@ func Test_Handler_WorklflowServiceAndPropsAndSpec_SaveAs(t *testing.T) {
 	assert.NoError(t, handler.SaveAsKubernetesManifests(tmpPath))
 	files, err := os.ReadDir(tmpPath)
 	assert.NoError(t, err)
-	assert.Len(t, files, 4)
+	assert.Len(t, files, 5)
 
 	expectedFiles := []string{
 		"01-configmap_service-props.yaml",
-		"02-configmap_01-service-resources-files.yaml",
-		"03-configmap_02-service-resources-specs.yaml",
-		"04-sonataflow_service.yaml",
+		"02-secret_service.yaml",
+		"03-configmap_01-service-resources-files.yaml",
+		"04-configmap_02-service-resources-specs.yaml",
+		"05-sonataflow_service.yaml",
 	}
 	expectedKinds := []schema.GroupVersionKind{
 		{Group: "", Version: "v1", Kind: "ConfigMap"},
+		{Group: "", Version: "v1", Kind: "Secret"},
 		{Group: "", Version: "v1", Kind: "ConfigMap"},
 		{Group: "", Version: "v1", Kind: "ConfigMap"},
 		{Group: "sonataflow.org", Version: "v1alpha08", Kind: "SonataFlow"},
@@ -254,8 +315,12 @@ func getWorkflowService() io.Reader {
 	return mustGetFile("testdata/workflows/workflow-service.sw.json")
 }
 
-func getWorkflowProperties() io.Reader {
+func getWorkflowApplicationProperties() io.Reader {
 	return mustGetFile("testdata/workflows/application.properties")
+}
+
+func getWorkflowSecretProperties() io.Reader {
+	return mustGetFile("testdata/workflows/secret.properties")
 }
 
 func getSpecOpenApi() io.Reader {

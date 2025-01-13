@@ -22,7 +22,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	operatorapi "github.com/apache/incubator-kie-tools/packages/sonataflow-operator/api/v1alpha08"
@@ -102,7 +101,7 @@ func TestCreateNewUserPropsConfigMap(t *testing.T) {
 				Labels: map[string]string{}}}},
 
 			&corev1.ConfigMap{
-				ObjectMeta: metav1.ObjectMeta{
+				ObjectMeta: v1.ObjectMeta{
 					Name:      t.Name() + "-props",
 					Namespace: "",
 					Labels: map[string]string{
@@ -128,7 +127,7 @@ func TestCreateNewUserPropsConfigMap(t *testing.T) {
 				}}}},
 
 			&corev1.ConfigMap{
-				ObjectMeta: metav1.ObjectMeta{
+				ObjectMeta: v1.ObjectMeta{
 					Name:      t.Name() + "-props",
 					Namespace: "",
 					Labels: map[string]string{
@@ -150,6 +149,74 @@ func TestCreateNewUserPropsConfigMap(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equalf(t, tt.want, CreateNewUserPropsConfigMap(tt.args.workflow), "CreateNewUserPropsConfigMap(%v)", tt.args.workflow)
+		})
+	}
+}
+
+func TestCreateNewUserPropsSecret(t *testing.T) {
+	type args struct {
+		workflow *operatorapi.SonataFlow
+	}
+	tests := []struct {
+		name string
+		args args
+		want *corev1.Secret
+	}{
+		{
+			"when the workflow has no labels",
+			args{workflow: &operatorapi.SonataFlow{ObjectMeta: v1.ObjectMeta{
+				Name:   t.Name(),
+				Labels: map[string]string{}}}},
+
+			&corev1.Secret{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      t.Name(),
+					Namespace: "",
+					Labels: map[string]string{
+						"app":                               t.Name(),
+						"app.kubernetes.io/name":            t.Name(),
+						"app.kubernetes.io/component":       "serverless-workflow",
+						"app.kubernetes.io/managed-by":      "sonataflow-operator",
+						"sonataflow.org/workflow-app":       t.Name(),
+						"sonataflow.org/workflow-namespace": "",
+					},
+				},
+				Data: map[string][]byte{
+					"secret.properties": []byte(""),
+				},
+			},
+		},
+		{
+			"when the workflow has labels",
+			args{workflow: &operatorapi.SonataFlow{ObjectMeta: v1.ObjectMeta{
+				Name: t.Name(),
+				Labels: map[string]string{
+					"older-label": t.Name(),
+				}}}},
+
+			&corev1.Secret{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      t.Name(),
+					Namespace: "",
+					Labels: map[string]string{
+						"older-label":                       t.Name(),
+						"app":                               t.Name(),
+						"app.kubernetes.io/name":            t.Name(),
+						"app.kubernetes.io/component":       "serverless-workflow",
+						"app.kubernetes.io/managed-by":      "sonataflow-operator",
+						"sonataflow.org/workflow-app":       t.Name(),
+						"sonataflow.org/workflow-namespace": "",
+					},
+				},
+				Data: map[string][]byte{
+					"secret.properties": []byte(""),
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equalf(t, tt.want, CreateNewUserPropsSecret(tt.args.workflow), "CreateNewUserPropsSecret(%v)", tt.args.workflow)
 		})
 	}
 }
@@ -389,6 +456,32 @@ func TestGetWorkflowUserPropertiesConfigMapName(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equalf(t, tt.want, GetWorkflowUserPropertiesConfigMapName(tt.args.workflow), "GetWorkflowUserPropertiesConfigMapName(%v)", tt.args.workflow)
+		})
+	}
+}
+
+func TestGetWorkflowUserPropertiesSecretName(t *testing.T) {
+	type args struct {
+		workflow *operatorapi.SonataFlow
+	}
+	tests := []struct {
+		name string
+		args args
+		want string
+	}{
+		{
+			name: "test",
+			args: args{workflow: &operatorapi.SonataFlow{
+				ObjectMeta: v1.ObjectMeta{
+					Name: t.Name(),
+				},
+			}},
+			want: t.Name(),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equalf(t, tt.want, GetWorkflowUserPropertiesSecretName(tt.args.workflow), "GetWorkflowUserPropertiesSecretName(%v)", tt.args.workflow)
 		})
 	}
 }

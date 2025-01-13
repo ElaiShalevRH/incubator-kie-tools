@@ -39,6 +39,7 @@ type DeployUndeployCmdConfig struct {
 	CustomGeneratedManifestDir string
 	TempDir                    string
 	ApplicationPropertiesPath  string
+	SecretPropertiesPath       string
 	SubflowsDir                string
 	SpecsDir                   string
 	SchemasDir                 string
@@ -121,6 +122,14 @@ func generateManifests(cfg *DeployUndeployCmdConfig) error {
 		fmt.Printf(" - ✅ Properties file found: %s\n", cfg.ApplicationPropertiesPath)
 	}
 
+	fmt.Println("🔍 Looking for secret files...")
+
+	secretPropertiesPath := findSecretPropertiesPath(dir)
+	if secretPropertiesPath != "" {
+		cfg.SecretPropertiesPath = secretPropertiesPath
+		fmt.Printf(" - ✅ Secret Properties file found: %s\n", cfg.SecretPropertiesPath)
+	}
+
 	supportFileExtensions := []string{metadata.JSONExtension, metadata.YAMLExtension, metadata.YMLExtension}
 
 	fmt.Println("🔍 Looking for specs files...")
@@ -182,6 +191,14 @@ func generateManifests(cfg *DeployUndeployCmdConfig) error {
 			return err
 		}
 		handler.WithAppProperties(appIO)
+	}
+
+	if cfg.SecretPropertiesPath != "" {
+		appIO, err := common.MustGetFile(cfg.SecretPropertiesPath)
+		if err != nil {
+			return err
+		}
+		handler.WithSecretProperties(appIO)
 	}
 
 	for _, subflow := range cfg.SubFlowsFilesPath {
@@ -246,6 +263,40 @@ func findApplicationPropertiesPath(directoryPath string) string {
 	}
 
 	return filePath
+}
+
+func findSecretPropertiesPath(directoryPath string) string {
+	filePath := filepath.Join(directoryPath, metadata.SecretProperties)
+
+	fileInfo, err := os.Stat(filePath)
+	if err != nil || fileInfo.IsDir() {
+		return ""
+	}
+
+	return filePath
+}
+
+func findSonataFlowFile(extensions []string) (string, error) {
+
+	dir, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("❌ ERROR: failed to get current directory: %w", err)
+	}
+
+	var matchingFiles []string
+	for _, ext := range extensions {
+		files, _ := filepath.Glob(filepath.Join(dir, "*."+ext))
+		matchingFiles = append(matchingFiles, files...)
+	}
+
+	switch len(matchingFiles) {
+	case 0:
+		return "", fmt.Errorf("❌ ERROR: no matching files found")
+	case 1:
+		return matchingFiles[0], nil
+	default:
+		return "", fmt.Errorf("❌ ERROR: multiple SonataFlow definition files found")
+	}
 }
 
 func setupConfigManifestPath(cfg *DeployUndeployCmdConfig) error {
